@@ -1,0 +1,2 @@
+- No output in Case 3 due to zero timespan
+- Case 4 includes all types of cases, yet not verified all bills

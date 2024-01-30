@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Linq;
+using System.Text;
 
 namespace BillingEngine;
 class Program
@@ -15,7 +16,7 @@ class Program
             var remainingDaysInCurrentMonth = lastDayOfMonth - usage.UsedFrom;
             int curMonth = usage.UsedFrom.Month;
             int curYear = usage.UsedFrom.Year;
-            var totalDifferenceInSeconds = differenceOfDates.TotalSeconds-1;
+            var totalDifferenceInSeconds = differenceOfDates.TotalSeconds;
             if (remainingDaysInCurrentMonth.TotalSeconds < differenceOfDates.TotalSeconds)
             {
                 var minimumSeconds = Math.Min(remainingDaysInCurrentMonth.TotalSeconds, totalDifferenceInSeconds);
@@ -25,10 +26,10 @@ class Program
                 while (totalDifferenceInSeconds > 0)
                 {
                     DateTime from = new DateTime(curYear, curMonth, 1);
-                    DateTime tillLastDate = new DateTime(curYear, curMonth, DateTime.DaysInMonth(curYear,curMonth),23,59,59);
-                    var totalDaysInCurMonth = (tillLastDate-from).TotalSeconds;
+                    DateTime tillLastDate = new DateTime((curMonth == 12 ? curYear + 1 : curYear), (curMonth == 12 ? 1 : curMonth + 1), DateTime.DaysInMonth((curMonth == 12 ? curYear + 1 : curYear), (curMonth == 12 ? 1 : curMonth + 1)), 0, 0, 0);
+                    var totalDaysInCurMonth = (tillLastDate - from).TotalSeconds;
                     minimumSeconds = Math.Min(totalDaysInCurMonth, totalDifferenceInSeconds);
-                    totalDifferenceInSeconds -= minimumSeconds+1;
+                    totalDifferenceInSeconds -= minimumSeconds;
                     DateTime till = from.AddSeconds(minimumSeconds);
                     AWSResourceUsage tempObj = new AWSResourceUsage(usage.CustomerID, usage.EC2InstanceID, usage.EC2InstanceType, from, till);
                     resourceUsages.Add(tempObj);
@@ -75,13 +76,46 @@ class Program
             var customerName = customers.Where(customer => customer.CustomerID.Replace("-", "") == item.Key.CustomerID)
                                         .Select(Customer => Customer.CustomerName).ToList()[0];
             var month = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(item.Key.Month);
+            string fileName = item.Key.CustomerID + "_" + month.Substring(0, 3) + "-" + item.Key.Year;
             double totalAmount = item.list.Sum((a) => a.totalCost);
             double totalDiff = item.list.Sum((a) => (a.UsedUntil - a.UsedFrom).TotalHours);
+            StringBuilder str = new StringBuilder();
             totalAmount = Math.Round(totalAmount, 4);
-            Console.WriteLine(customerName);
-            Console.WriteLine("Bill for month of " + month + " " + item.Key.Year);
-            Console.WriteLine("Total Cost = " + totalAmount);
+            str.AppendLine(customerName);
+            //Console.WriteLine(customerName);
+            str.AppendLine("Bill for month of " + month + " " + item.Key.Year);
+            //Console.WriteLine("Bill for month of " + month + " " + item.Key.Year);
+            //Console.WriteLine("Total Cost = " + totalAmount);
+            str.AppendLine("Total Cost: " + totalAmount);
+            str.AppendLine("Resource Type,Total Resources,Total Used Time (HH:mm:ss),Total Billed Time (HH:mm:ss),Rate (per hour),Total Amount");
+            var grp = awsResourceUsage.GroupBy(res => new { res.EC2InstanceType, res.EC2InstanceID, res.CustomerID, res.UsedFrom.Month, res.UsedFrom.Year });
+            foreach (var item1 in grp)
+            {
+                var cost = awsResourceTypes.Where(type => type.InstanceType.Equals(item1.Key.EC2InstanceType)).Select(type => type.Charge).FirstOrDefault();
+                //str.AppendLine(item1.Key.EC2InstanceType + "," + item1.Count() + "," + (item1.Key.UsedUntil - item1.Key.UsedFrom).ToString("HH:MM:SS") + "" + cost);
+                var resourceUsageObj = awsResourceUsage.Where(resource => resource.CustomerID.Equals(item1.Key.CustomerID)).Select(resource => new { UsedFrom = resource.UsedFrom, UsedUntil = resource.UsedUntil }).ToList();
+                TimeSpan t1 = resourceUsageObj[0].UsedUntil.TimeOfDay;
+                TimeSpan t2 = resourceUsageObj[0].UsedFrom.TimeOfDay;
+                TimeSpan diff = t1 - t2;
+                //Console.WriteLine(diff.ToString());
+                //Console.WriteLine(item1.Key.EC2InstanceType + "," + item1.Count() + "," + diff.Hours + ":" + diff.Minutes + ":" + diff.Seconds + "," + cost + "," + totalAmount);
+            }
+            TimeSpan d = new TimeSpan();
+            foreach (var item2 in item.list)
+            {
+                TimeSpan t1 = item2.UsedUntil.TimeOfDay;
+                TimeSpan t2 = item2.UsedFrom.TimeOfDay;
+                TimeSpan d2 = t1 - t2;
+                //Console.WriteLine(d2);
+                Console.WriteLine(t1.ToString());
+                d += d2;
+                //Console.WriteLine(d.ToString());
+                //d.Add(d2);
+            }
+                Console.WriteLine( " " + d.ToString());
             Console.WriteLine();
+            //Console.WriteLine();
+            //writeFile(fileName,str.ToString());
         }
     }
     #endregion
@@ -104,15 +138,19 @@ class Program
 
     #endregion
 
+    public static void writeFile(string fileName, string content)
+    {
+        File.WriteAllText("../../../Output/" + fileName + ".csv", content);
+    }
+
     public static void Main(string[] args)
     {
 
-
-        for (int i = 1; i < 5; i++)
+        for (int i = 1; i < 2; i++)
         {
-            string pathOfAWSResourceUsage = "C:/Users/YashDaxini/Downloads/TestCases/TestCases/Case" + i + "/Input/AWSCustomerUsage.csv";
-            string pathOfAWSResourceTypes = "C:/Users/YashDaxini/Downloads/TestCases/TestCases/Case" + i + "/Input/AWSResourceTypes.csv";
-            string pathOfCustomer = "C:/Users/YashDaxini/Downloads/TestCases/TestCases/Case" + i + "/Input/Customer.csv";
+            string pathOfAWSResourceUsage = "../../../TestCases/TestCases/Case" + i + "/Input/AWSCustomerUsage.csv";
+            string pathOfAWSResourceTypes = "../../../TestCases/TestCases/Case" + i + "/Input/AWSResourceTypes.csv";
+            string pathOfCustomer = "../../../TestCases/TestCases/Case" + i + "/Input/Customer.csv";
 
             List<Customer> customers = new List<Customer>();
             List<AWSResourceUsage> awsResourceUsage = new List<AWSResourceUsage>();
@@ -121,6 +159,8 @@ class Program
             takeInput(ref customers, ref awsResourceUsage, ref awsResourceTypes, pathOfCustomer, pathOfAWSResourceTypes, pathOfAWSResourceUsage);
 
             calculateCost(awsResourceTypes, awsResourceUsage, customers);
+
+            //writeFile();
 
         }
     }
