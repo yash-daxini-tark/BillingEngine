@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using System.Linq;
 
 namespace BillingEngine;
 class Program
@@ -14,33 +15,24 @@ class Program
             var remainingDaysInCurrentMonth = lastDayOfMonth - usage.UsedFrom;
             int curMonth = usage.UsedFrom.Month;
             int curYear = usage.UsedFrom.Year;
-            var totalDifferenceInSeconds = differenceOfDates.TotalSeconds;
+            var totalDifferenceInSeconds = differenceOfDates.TotalSeconds-1;
             if (remainingDaysInCurrentMonth.TotalSeconds < differenceOfDates.TotalSeconds)
             {
                 var minimumSeconds = Math.Min(remainingDaysInCurrentMonth.TotalSeconds, totalDifferenceInSeconds);
                 usage.UsedUntil = usage.UsedFrom.AddSeconds(minimumSeconds);
                 totalDifferenceInSeconds -= minimumSeconds;
-                curMonth++;
-                if (curMonth == 13)
-                {
-                    curYear++;
-                    curMonth = 1;
-                }
+                curMonth = curMonth == 12 ? 1 : curMonth + 1;
                 while (totalDifferenceInSeconds > 0)
                 {
-                    var totalDaysInCurMonth = DateTime.DaysInMonth(curYear, curMonth) * 24 * 60 * 60;
-                    minimumSeconds = Math.Min(totalDaysInCurMonth, totalDifferenceInSeconds);
-                    totalDifferenceInSeconds -= minimumSeconds;
                     DateTime from = new DateTime(curYear, curMonth, 1);
+                    DateTime tillLastDate = new DateTime(curYear, curMonth, DateTime.DaysInMonth(curYear,curMonth),23,59,59);
+                    var totalDaysInCurMonth = (tillLastDate-from).TotalSeconds;
+                    minimumSeconds = Math.Min(totalDaysInCurMonth, totalDifferenceInSeconds);
+                    totalDifferenceInSeconds -= minimumSeconds+1;
                     DateTime till = from.AddSeconds(minimumSeconds);
                     AWSResourceUsage tempObj = new AWSResourceUsage(usage.CustomerID, usage.EC2InstanceID, usage.EC2InstanceType, from, till);
                     resourceUsages.Add(tempObj);
-                    curMonth++;
-                    if (curMonth == 13)
-                    {
-                        curYear++;
-                        curMonth = 1;
-                    }
+                    curMonth = curMonth == 12 ? 1 : curMonth + 1;
                 }
             }
         }
@@ -54,7 +46,7 @@ class Program
     {
         arrangeDatesByItsMonth(awsResourceUsage);
 
-        Console.WriteLine( string.Format(" ",awsResourceUsage) );
+        Console.WriteLine(string.Format(" ", awsResourceUsage));
 
         var grouped = awsResourceUsage.OrderBy(resource => resource.CustomerID)
                                       .ThenBy(resource => resource.UsedFrom)
@@ -71,7 +63,7 @@ class Program
             foreach (var item1 in item.list)
             {
                 var diff = item1.UsedUntil - item1.UsedFrom;
-                item1.totalCost += Convert.ToDouble(diff.TotalHours * cost);
+                item1.totalCost += Convert.ToDouble(Math.Ceiling(diff.TotalHours) * cost);
             }
         }
 
@@ -84,6 +76,8 @@ class Program
                                         .Select(Customer => Customer.CustomerName).ToList()[0];
             var month = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(item.Key.Month);
             double totalAmount = item.list.Sum((a) => a.totalCost);
+            double totalDiff = item.list.Sum((a) => (a.UsedUntil - a.UsedFrom).TotalHours);
+            totalAmount = Math.Round(totalAmount, 4);
             Console.WriteLine(customerName);
             Console.WriteLine("Bill for month of " + month + " " + item.Key.Year);
             Console.WriteLine("Total Cost = " + totalAmount);
@@ -94,7 +88,7 @@ class Program
 
     #region Take Input
 
-    public static void takeInput(ref List<Customer> customers,ref List<AWSResourceUsage> awsResourceUsage, ref List<AWSResourceTypes> awsResourceTypes, string pathOfCustomer, string pathOfAWSResourceTypes, string pathOfAWSResourceUsage)
+    public static void takeInput(ref List<Customer> customers, ref List<AWSResourceUsage> awsResourceUsage, ref List<AWSResourceTypes> awsResourceTypes, string pathOfCustomer, string pathOfAWSResourceTypes, string pathOfAWSResourceUsage)
     {
         GenericList<Customer> customerObj = ReadCSV<Customer>.LoadDataFromCsv(pathOfCustomer);
         customers = customerObj.DataList;
@@ -104,8 +98,6 @@ class Program
 
         GenericList<AWSResourceUsage> awsResourceUsageObj = ReadCSV<AWSResourceUsage>.LoadDataFromCsv(pathOfAWSResourceUsage);
         awsResourceUsage = awsResourceUsageObj.DataList;
-
-        //foreach (var item in customers) Console.WriteLine(item.ToString());
 
         Console.WriteLine();
     }
@@ -126,7 +118,7 @@ class Program
             List<AWSResourceUsage> awsResourceUsage = new List<AWSResourceUsage>();
             List<AWSResourceTypes> awsResourceTypes = new List<AWSResourceTypes>();
 
-            takeInput(ref customers,ref awsResourceUsage,ref awsResourceTypes,pathOfCustomer,pathOfAWSResourceTypes,pathOfAWSResourceUsage);
+            takeInput(ref customers, ref awsResourceUsage, ref awsResourceTypes, pathOfCustomer, pathOfAWSResourceTypes, pathOfAWSResourceUsage);
 
             calculateCost(awsResourceTypes, awsResourceUsage, customers);
 
