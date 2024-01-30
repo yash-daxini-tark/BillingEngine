@@ -13,13 +13,12 @@ namespace BillingEngine
         public string CustomerID { get; set; }
         [Name("Customer Name")]
         public string CustomerName { get; set; }
-        public Dictionary<string,double> billForUpcommnigMonths { get; set; }   
 
         public Customer(string customerID,string customerName)
         {
             CustomerID = customerID;
             CustomerName = customerName;
-            billForUpcommnigMonths = new Dictionary<string,double>();   
+
         }
         public Customer() { }   
         override
