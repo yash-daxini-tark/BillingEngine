@@ -21,7 +21,7 @@ namespace BillingEngine
         public DateTime UsedUntil { get; set; }
 
         [Ignore]
-        public double totalCost { get; set; }   
+        public double totalCost { get; set; }
 
         public AWSResourceUsage(string customerID, string eC2InstanceID, string eC2InstanceType, DateTime usedFrom, DateTime usedUntil)
         {
@@ -30,6 +30,15 @@ namespace BillingEngine
             EC2InstanceType = eC2InstanceType;
             UsedFrom = usedFrom;
             UsedUntil = usedUntil;
+            totalCost = 0;
+        }
+        public AWSResourceUsage(AWSResourceUsage aWSResourceUsage)
+        {
+            CustomerID = aWSResourceUsage.CustomerID;
+            EC2InstanceID = aWSResourceUsage.EC2InstanceID;
+            EC2InstanceType = aWSResourceUsage.EC2InstanceType;
+            UsedFrom = aWSResourceUsage.UsedFrom;
+            UsedUntil = aWSResourceUsage.UsedUntil;
             totalCost = 0;
         }
         public AWSResourceUsage()

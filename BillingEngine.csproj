@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <Folder Include="Output\" />
+    <Folder Include="Output\Testcase3\" />
+    <Folder Include="TestCases\TestCases\Case3\Output\" />
   </ItemGroup>
 
 </Project>
