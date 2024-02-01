@@ -5,68 +5,23 @@ using System.Text;
 namespace BillingEngine;
 class Program
 {
-    #region arrangeDatesByItsMonth
-    public static List<AWSResourceUsage> arrangeDatesByItsMonth(List<AWSResourceUsage> resourceUsages)
+    #region Split Resource Usage Base on Month
+    public static List<AWSResourceUsage> splitResourceUsageByMonth(List<AWSResourceUsage> resourceUsages)
     {
         List<AWSResourceUsage> updatedResources = new List<AWSResourceUsage>();
-        for (int i = 0; i < resourceUsages.Count(); i++)
+        foreach (AWSResourceUsage resource in resourceUsages)
         {
-            AWSResourceUsage usage = resourceUsages[i];
-            var differenceOfDates = usage.UsedUntil - usage.UsedFrom;
-            var lastDayOfMonth = new DateTime(usage.UsedFrom.Year, usage.UsedFrom.Month, DateTime.DaysInMonth(usage.UsedFrom.Year, usage.UsedFrom.Month), 23, 59, 59);
-            var remainingDaysInCurrentMonth = lastDayOfMonth - usage.UsedFrom;
-            int curMonth = usage.UsedFrom.Month;
-            int curYear = usage.UsedFrom.Year;
-            var totalDifferenceInSeconds = differenceOfDates.TotalSeconds - 1;
-            if (remainingDaysInCurrentMonth.TotalSeconds <= differenceOfDates.TotalSeconds)
-            {
-                var minimumSeconds = Math.Min(remainingDaysInCurrentMonth.TotalSeconds, totalDifferenceInSeconds);
-                if (lastDayOfMonth == usage.UsedFrom)
-                {
-                    usage.UsedUntil = lastDayOfMonth.Add(new TimeSpan(0, 0, 0, 1));
-                }
-                else usage.UsedUntil = usage.UsedFrom.AddSeconds(minimumSeconds);
-                updatedResources.Add(new AWSResourceUsage(usage));
-                totalDifferenceInSeconds -= minimumSeconds;
-                if (curMonth == 12)
-                {
-                    curMonth = 1;
-                    curYear++;
-                }
-                else curMonth++;
-                while (totalDifferenceInSeconds > 0)
-                {
-                    DateTime from = new DateTime(curYear, curMonth, 1);
-                    DateTime tillLastDate = new DateTime(curYear, curMonth, DateTime.DaysInMonth(curYear, curMonth), 23, 59, 59);
-                    var totalDaysInCurMonth = (tillLastDate - from).TotalSeconds;
-                    minimumSeconds = Math.Min(totalDaysInCurMonth, totalDifferenceInSeconds);
-                    totalDifferenceInSeconds -= minimumSeconds + 1;
-                    DateTime till = from.AddSeconds(minimumSeconds);
-                    AWSResourceUsage tempObj = new AWSResourceUsage(usage.CustomerID, usage.EC2InstanceID, usage.EC2InstanceType, from, till);
-                    updatedResources.Add(tempObj);
-                    if (curMonth == 12)
-                    {
-                        curMonth = 1;
-                        curYear++;
-                    }
-                    else curMonth++;
-                }
-            }
-            else
-            {
-                updatedResources.Add(new AWSResourceUsage(usage));
-            }
+            updatedResources = updatedResources.Concat(resource.splitDateBasedOnItsMonth()).ToList();
         }
         return updatedResources;
     }
-
     #endregion
 
     #region calculate cost
 
     public static void calculateCost(List<AWSResourceTypes> awsResourceTypes, List<AWSResourceUsage> awsResourceUsage, List<Customer> customers, int testcase)
     {
-        List<AWSResourceUsage> updatedResources = arrangeDatesByItsMonth(awsResourceUsage);
+        List<AWSResourceUsage> updatedResources = splitResourceUsageByMonth(awsResourceUsage);
 
         var grouped = updatedResources.OrderBy(resource => resource.CustomerID)
                                       .ThenBy(resource => resource.UsedFrom)
@@ -180,6 +135,8 @@ class Program
     public static void Main(string[] args)
     {
 
+        #region
+
         for (int i = 1; i < 5; i++)
         {
             string pathOfAWSResourceUsage = "../../../TestCases/TestCases/Case" + i + "/Input/AWSCustomerUsage.csv";
@@ -195,5 +152,7 @@ class Program
             calculateCost(awsResourceTypes, awsResourceUsage, customers, i);
 
         }
+
+        #endregion
     }
 }
