@@ -17,89 +17,55 @@ class Program
     }
     #endregion
 
-    #region calculate cost
+    #region Calculate Cost
+    public static void calculateCostForEachResource(ref List<AWSResourceUsage> updatedResources, Dictionary<string, string> changesForEachInstanceType)
+    {
+        foreach (AWSResourceUsage resource in updatedResources)
+        {
+            double cost = Convert.ToDouble(changesForEachInstanceType[resource.EC2InstanceType].Substring(1));
+            resource.calculateCost(cost);
+        }
+    }
+    #endregion
 
-    public static void calculateCost(List<AWSResourceTypes> awsResourceTypes, List<AWSResourceUsage> awsResourceUsage, List<Customer> customers, int testcase)
+    #region Generate bill
+
+    public static void generateBill(List<AWSResourceTypes> awsResourceTypes, List<AWSResourceUsage> awsResourceUsage, List<Customer> customers, int testcase)
     {
         List<AWSResourceUsage> updatedResources = splitResourceUsageByMonth(awsResourceUsage);
 
-        var grouped = updatedResources.OrderBy(resource => resource.CustomerID)
-                                      .ThenBy(resource => resource.UsedFrom)
-                                      .GroupBy(resource => new { resource.CustomerID, resource.EC2InstanceType, resource.UsedFrom.Year, resource.UsedFrom.Month })
-                                      .Select(resource => new { key = resource.Key, list = resource.Select(resource => resource).ToList() });
+        Dictionary<string, string> changesForEachInstanceType = awsResourceTypes.ToDictionary(type => type.InstanceType, type => type.Charge);
+        Dictionary<string, string> customerNames = customers.ToDictionary(customer => customer.CustomerID.Replace("-", ""), customer => customer.CustomerName);
 
-        foreach (var item in grouped)
-        {
-            double cost = Convert.ToDouble(awsResourceTypes.Where(type => type.InstanceType.Equals(item.key.EC2InstanceType))
-                                 .Select(type => type.Charge).ToList()[0].ToString().Substring(1));
+        calculateCostForEachResource(ref updatedResources, changesForEachInstanceType);
 
-            foreach (var item1 in item.list)
-            {
-                var diff = item1.UsedUntil - item1.UsedFrom;
-                item1.totalCost += Convert.ToDouble(Math.Ceiling(diff.TotalHours) * cost);
-            }
-        }
-
-        var customerWise = updatedResources.GroupBy(resource => new { resource.CustomerID, resource.UsedFrom.Month, resource.UsedFrom.Year })
+        var groupedResources = updatedResources.GroupBy(resource => new { resource.CustomerID, resource.UsedFrom.Month, resource.UsedFrom.Year })
                                            .Select(resource => new { Key = resource.Key, list = resource.Select(resource => resource).ToList() });
 
-        foreach (var item in customerWise)
+        foreach (var resource in groupedResources)
         {
-            var customerName = customers.Where(customer => customer.CustomerID.Replace("-", "") == item.Key.CustomerID)
-                                        .Select(Customer => Customer.CustomerName).ToList()[0];
-            var month = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(item.Key.Month);
-            string fileName = item.Key.CustomerID.Substring(0, 4) + "-" + item.Key.CustomerID.Substring(4) + "_" + month.Substring(0, 3).ToUpper() + "-" + item.Key.Year;
-            double totalAmount = item.list.Sum((a) => a.totalCost);
-            double totalDiff = item.list.Sum((a) => (a.UsedUntil - a.UsedFrom).TotalHours);
-            StringBuilder str = new StringBuilder();
-            totalAmount = Math.Round(totalAmount, 4);
-            str.AppendLine(customerName);
-            str.AppendLine("Bill for month of " + month + " " + item.Key.Year);
-            str.AppendLine("Total Amount: " + totalAmount);
-            str.AppendLine("Resource Type,Total Resources,Total Used Time (HH:mm:ss),Total Billed Time (HH:mm:ss),Rate (per hour),Total Amount");
-            var grp = awsResourceUsage.GroupBy(res => new { res.EC2InstanceType, res.EC2InstanceID, res.CustomerID, res.UsedFrom.Month, res.UsedFrom.Year });
-            Dictionary<string, TimeSpan> usedTimeForeachInstanceType = new Dictionary<string, TimeSpan>();
-            Dictionary<string, int> countOfEachInstanceType = new Dictionary<string, int>();
-            Dictionary<string, double> totalCost = new Dictionary<string, double>();
-            HashSet<string> ec2InstanceIDs = new HashSet<string>();
-            foreach (var item2 in item.list)
+            var g = resource.list.GroupBy(resource => new { resource.EC2InstanceType });
+            double totalAmount = Math.Round(resource.list.Sum(res => res.totalCost), 4);
+            string monthName = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(resource.Key.Month);
+            string fileName = resource.Key.CustomerID.Substring(0, 4) + "-" + resource.Key.CustomerID.Substring(4) + "_" + monthName.Substring(0, 3).ToUpper() + "-" + resource.Key.Year;
+            if (totalAmount == 0) continue;
+            List<BillResourceInformation> resourceInformation = new List<BillResourceInformation>();
+            foreach (var item5 in g)
             {
-                TimeSpan t = (item2.UsedUntil - item2.UsedFrom);
-                if (usedTimeForeachInstanceType.ContainsKey(item2.EC2InstanceType))
-                {
-                    totalCost[item2.EC2InstanceType] += item2.totalCost;
-                    usedTimeForeachInstanceType[item2.EC2InstanceType] += t;
-                    if (ec2InstanceIDs.Contains(item2.EC2InstanceID)) continue;
-                    countOfEachInstanceType[item2.EC2InstanceType]++;
-                    ec2InstanceIDs.Add(item2.EC2InstanceID);
-                }
-                else
-                {
-                    totalCost.Add(item2.EC2InstanceType, item2.totalCost);
-                    usedTimeForeachInstanceType.Add(item2.EC2InstanceType, t);
-                    if (ec2InstanceIDs.Contains(item2.EC2InstanceID)) continue;
-                    countOfEachInstanceType.Add(item2.EC2InstanceType, 1);
-                    ec2InstanceIDs.Add(item2.EC2InstanceID);
-                }
+                string instanceType = item5.Key.EC2InstanceType;
+                int totalInstances = item5.Select(item => item.EC2InstanceID).Distinct().Count();
+                double totalCost = Math.Round(item5.Sum(item => item.totalCost), 4);
+                var sumOfDates = item5.Select(item => item.UsedUntil - item.UsedFrom).Aggregate((date1, date2) => date1.Add(date2));
+                if (sumOfDates.Seconds == 59) sumOfDates = sumOfDates.Add(new TimeSpan(0, 0, 0, 1));
+                resourceInformation.Add(new BillResourceInformation(instanceType, totalInstances, (int)Math.Floor(sumOfDates.TotalHours) + ":" + sumOfDates.Minutes + ":" + sumOfDates.Seconds
+                                                , (int)Math.Ceiling(sumOfDates.TotalHours) + ":00:00"
+                                                , changesForEachInstanceType[instanceType]
+                                                , totalCost));
             }
-            double finalAmountForCurrentFile = 0;
-            foreach (var key in usedTimeForeachInstanceType.Keys)
-            {
-                var cost = awsResourceTypes.Where(type => type.InstanceType.Equals(key)).Select(type => type.Charge).FirstOrDefault();
-                TimeSpan totalTimeForCurrentInstanceType = usedTimeForeachInstanceType.ContainsKey(key) ? usedTimeForeachInstanceType[key] : new TimeSpan();
-                if (totalTimeForCurrentInstanceType.Minutes == 59 && totalTimeForCurrentInstanceType.Seconds == 59)
-                {
-                    str.AppendLine(key + "," + countOfEachInstanceType[key] + "," + Math.Floor(totalTimeForCurrentInstanceType.TotalHours + 1) + ":0:0" + "," + Math.Ceiling(totalTimeForCurrentInstanceType.TotalHours) + ":00:00" + "," + cost + "," + "$" + Math.Round(totalCost[key], 4));
-                }
-                else if (totalTimeForCurrentInstanceType.Seconds == 59)
-                {
-                    str.AppendLine(key + "," + countOfEachInstanceType[key] + "," + Math.Floor(totalTimeForCurrentInstanceType.TotalHours) + ":" + (totalTimeForCurrentInstanceType.Minutes + 1) + ":0" + "," + Math.Ceiling(totalTimeForCurrentInstanceType.TotalHours) + ":00:00" + "," + cost + "," + "$" + Math.Round(totalCost[key], 4));
-                }
-                else str.AppendLine(key + "," + countOfEachInstanceType[key] + "," + Math.Floor(totalTimeForCurrentInstanceType.TotalHours) + ":" + totalTimeForCurrentInstanceType.Minutes + ":" + totalTimeForCurrentInstanceType.Seconds + "," + Math.Ceiling(totalTimeForCurrentInstanceType.TotalHours) + ":00:00" + "," + cost + "," + "$" + Math.Round(totalCost[key], 4));
-                finalAmountForCurrentFile = totalCost[key];
-            }
-            if (finalAmountForCurrentFile == 0) continue;
-            writeFile(fileName, str.ToString(), testcase);
+            BillFormat bill = new BillFormat(customerNames[resource.Key.CustomerID], "Bill for month of " + monthName + " " + resource.Key.Year
+                                                , "Total Amount: " + totalAmount, "Resource Type,Total Resources,Total Used Time (HH:mm:ss),Total Billed Time (HH:mm:ss),Rate (per hour),Total Amount"
+                                                , resourceInformation);
+            writeFile(fileName, bill.ToString(), testcase);
         }
     }
     #endregion
@@ -135,9 +101,9 @@ class Program
     public static void Main(string[] args)
     {
 
-        #region
+        #region Get Input
 
-        for (int i = 1; i < 5; i++)
+        for (int i = 1; i < 2; i++)
         {
             string pathOfAWSResourceUsage = "../../../TestCases/TestCases/Case" + i + "/Input/AWSCustomerUsage.csv";
             string pathOfAWSResourceTypes = "../../../TestCases/TestCases/Case" + i + "/Input/AWSResourceTypes.csv";
@@ -148,8 +114,7 @@ class Program
             List<AWSResourceTypes> awsResourceTypes = new List<AWSResourceTypes>();
 
             takeInput(ref customers, ref awsResourceUsage, ref awsResourceTypes, pathOfCustomer, pathOfAWSResourceTypes, pathOfAWSResourceUsage);
-
-            calculateCost(awsResourceTypes, awsResourceUsage, customers, i);
+            generateBill(awsResourceTypes, awsResourceUsage, customers, i);
 
         }
 

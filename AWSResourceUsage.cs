@@ -57,7 +57,11 @@ namespace BillingEngine
             }
             return updatedResources;
         }
-
+        public double calculateCost(double charge)
+        {
+            totalCost = Math.Ceiling((UsedUntil - UsedFrom).TotalHours) * charge;
+            return totalCost;
+        }
         override
         public string ToString()
         {
