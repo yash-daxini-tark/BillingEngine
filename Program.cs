@@ -103,7 +103,7 @@ class Program
 
         #region Get Input
 
-        for (int i = 1; i < 2; i++)
+        for (int i = 1; i < 5; i++)
         {
             string pathOfAWSResourceUsage = "../../../TestCases/TestCases/Case" + i + "/Input/AWSCustomerUsage.csv";
             string pathOfAWSResourceTypes = "../../../TestCases/TestCases/Case" + i + "/Input/AWSResourceTypes.csv";
