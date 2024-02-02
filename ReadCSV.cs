@@ -11,14 +11,14 @@ namespace BillingEngine
 {
     internal class ReadCSV<T>
     {
-        public static GenericList<T> LoadDataFromCsv(string filePath)
+        public static List<T> LoadDataFromCsv(string filePath)
         {
-            GenericList<T> csvData = new GenericList<T>();
+            List<T> csvData = new List<T>();
 
             using (var reader = new StreamReader(filePath))
             using (var csv = new CsvReader(reader, CultureInfo.InvariantCulture))
             {
-                csvData.DataList = csv.GetRecords<T>().ToList();
+                csvData = csv.GetRecords<T>().ToList();
             }
 
             return csvData;

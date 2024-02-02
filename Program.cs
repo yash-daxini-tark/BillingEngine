@@ -1,7 +1,4 @@
 ﻿using System.Globalization;
-using System.Linq;
-using System.Text;
-
 namespace BillingEngine;
 class Program
 {
@@ -29,7 +26,6 @@ class Program
     #endregion
 
     #region Generate bill
-
     public static void generateBill(List<AWSResourceTypes> awsResourceTypes, List<AWSResourceUsage> awsResourceUsage, List<Customer> customers, int testcase)
     {
         List<AWSResourceUsage> updatedResources = splitResourceUsageByMonth(awsResourceUsage);
@@ -71,23 +67,15 @@ class Program
     #endregion
 
     #region Take Input
-
     public static void takeInput(ref List<Customer> customers, ref List<AWSResourceUsage> awsResourceUsage, ref List<AWSResourceTypes> awsResourceTypes, string pathOfCustomer, string pathOfAWSResourceTypes, string pathOfAWSResourceUsage)
     {
-        GenericList<Customer> customerObj = ReadCSV<Customer>.LoadDataFromCsv(pathOfCustomer);
-        customers = customerObj.DataList;
-
-        GenericList<AWSResourceTypes> awsResourceTypesObj = ReadCSV<AWSResourceTypes>.LoadDataFromCsv(pathOfAWSResourceTypes);
-        awsResourceTypes = awsResourceTypesObj.DataList;
-
-        GenericList<AWSResourceUsage> awsResourceUsageObj = ReadCSV<AWSResourceUsage>.LoadDataFromCsv(pathOfAWSResourceUsage);
-        awsResourceUsage = awsResourceUsageObj.DataList;
+        customers = ReadCSV<Customer>.LoadDataFromCsv(pathOfCustomer);
+        awsResourceTypes = ReadCSV<AWSResourceTypes>.LoadDataFromCsv(pathOfAWSResourceTypes);
+        awsResourceUsage = ReadCSV<AWSResourceUsage>.LoadDataFromCsv(pathOfAWSResourceUsage);
     }
-
     #endregion
 
     #region Write Into File
-
     public static void writeFile(string fileName, string content, int testcase)
     {
         string directory = "../../../Output/" + "Testcase" + testcase;
@@ -100,9 +88,6 @@ class Program
 
     public static void Main(string[] args)
     {
-
-        #region Get Input
-
         for (int i = 1; i < 5; i++)
         {
             string pathOfAWSResourceUsage = "../../../TestCases/TestCases/Case" + i + "/Input/AWSCustomerUsage.csv";
@@ -115,9 +100,6 @@ class Program
 
             takeInput(ref customers, ref awsResourceUsage, ref awsResourceTypes, pathOfCustomer, pathOfAWSResourceTypes, pathOfAWSResourceUsage);
             generateBill(awsResourceTypes, awsResourceUsage, customers, i);
-
         }
-
-        #endregion
     }
 }
